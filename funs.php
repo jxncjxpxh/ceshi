@@ -34,4 +34,4 @@ array_walk($arr, function ($k,$v) {
 $s = function() {
     return 'sb';
 };
-//var_dump($s); test
+//var_dump($s); test sbsb
