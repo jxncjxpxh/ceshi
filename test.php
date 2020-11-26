@@ -27,18 +27,40 @@
 //    die('waiting');
 //}
 
-$fp = fopen('access.log', 'a+');
-$re = flock($fp, LOCK_EX);
-var_dump($re);
+//$fp = fopen('access.log', 'a+');
+//$re = flock($fp, LOCK_EX);
+//var_dump($re);
+//
+//if($re) {
+//    //拿到了独占锁 可以写入数据
+//    fwrite($fp, time()."\r\n");
+//    sleep(10);
+//    flock($fp, LOCK_UN);
+//    die('sucess');
+//
+//} else {
+//    die('waiting...');
+//}
+//fclose($fp);
+class test{
+    public function testTry(){
+        $i = 0;
+        try {
+            $i= $i+1;
+            throw new Exception('sb');
+            return $i;
+        } catch (Exception $e) {
+            echo "wc";
+        } finally {
+            $i= $i+2;
+            echo $i;
+//             print_r($i);
+//            return "1111";//当finally有return的时候 返回这个，当注销后，返回try 或者是 catch的内容。
 
-if($re) {
-    //拿到了独占锁 可以写入数据
-    fwrite($fp, time()."\r\n");
-    sleep(10);
-    flock($fp, LOCK_UN);
-    die('sucess');
+        }
 
-} else {
-    die('waiting...');
+    }
 }
-fclose($fp);
+
+$b = new test();
+echo $b->testTry();
