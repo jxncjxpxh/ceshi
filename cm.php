@@ -34,7 +34,14 @@ function insert($conn, $data , $tableName) {
     $conn->exec($sql);
 }
 
+function orderNo() {
+    return date('ymd') . substr(implode(null , array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, 8);
+}
 
+/**
+ * 利用redis list 实现秒杀高并发
+ * Class Test
+ */
 class Test {
     private static $instance = null;
 
@@ -135,6 +142,140 @@ class Test {
      }
 }
 
-$o = new Test();
+//$o = new Test();
 //$o->doPageSaveNum();
-$o->doPageGoodsStore();
+//$o->doPageGoodsStore();
+$conn = pdo_connect();
+$sql = 'SELECT * FROM `ims_hotmallstore_goods` WHERE id = 1';
+$data = select($conn, $sql);
+
+//利用setnx命令实现锁进制
+
+/*if(!empty($data[0] && $data[0]['num'] > 0)) {
+    $redis = new Redis();
+    $redis->connect('127.0.0.1', 6379);
+    $redis->auth('');
+    $s = $redis->setnx('testkeys', 1);
+    if ($s) {
+        //拿到了锁
+        $sql = 'UPDATE `ims_hotmallstore_goods` SET num=num -1 WHERE  id = ' . $data[0]['id'];
+
+        if($conn->exec($sql)) {
+            $user_id = mt_rand(1, 700);
+            $idata['user_id'] = $user_id;
+            $idata['goods_id'] = $data[0]['id'];
+            $idata['number'] = 1;
+            $idata['price'] = $data[0]['money'];
+            $idata['status'] = 1;
+            $idata['sku_id'] = 2;
+            $idata['order_sn'] = orderNo();
+            $idata['create_time'] = date('Y-m-d H:i:s');
+            insert($conn, $idata, 'ims_order'); //订单
+            $log['status'] = 1;
+            $log['msg'] = '减库成功';
+            $log['create_time'] = date('Y-m-d H:i:s');
+            insert($conn, $log, 'ims_order_log');
+        } else {
+            $log['status'] = 0;
+            $log['msg'] = '减库失败';
+            $log['create_time'] = date('Y-m-d H:i:s');
+            insert($conn, $log, 'ims_order_log');
+        }
+
+        $redis->del('testkeys');
+
+    } else {
+        $log['status'] = -2;
+        $log['msg'] = '排队等待';
+        $log['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $log, 'ims_order_log');
+    }
+} else {
+    $log['status'] = -1;
+    $log['msg'] = '抢完了';
+    $log['create_time'] = date('Y-m-d H:i:s');
+    insert($conn, $log, 'ims_order_log');
+}*/
+
+/**
+ * 常规思路 【会出现超卖】
+ */
+/*if(!empty($data[0] && $data[0]['num'] > 0)) {
+//    $sql = 'UPDATE `ims_hotmallstore_goods` SET num=num -1 WHERE num > 0 and id = ' . $data[0]['id'];
+    $sql = 'UPDATE `ims_hotmallstore_goods` SET num=num -1 WHERE id = ' . $data[0]['id'];
+
+    if($conn->exec($sql)) {
+        $user_id = mt_rand(1, 700);
+        $idata['user_id'] = $user_id;
+        $idata['goods_id'] = $data[0]['id'];
+        $idata['number'] = 1;
+        $idata['price'] = $data[0]['money'];
+        $idata['status'] = 1;
+        $idata['sku_id'] = 2;
+        $idata['order_sn'] = orderNo();
+        $idata['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $idata, 'ims_order'); //订单
+        $log['status'] = 1;
+        $log['msg'] = '减库成功';
+        $log['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $log, 'ims_order_log');
+    } else {
+        $log['status'] = 0;
+        $log['msg'] = '减库失败';
+        $log['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $log, 'ims_order_log');
+    }
+
+} else {
+    $log['status'] = -1;
+    $log['msg'] = '抢完了';
+    $log['create_time'] = date('Y-m-d H:i:s');
+    insert($conn, $log, 'ims_order_log');
+}*/
+
+/**
+ * 利用文件锁
+ */
+/*if(!empty($data[0] && $data[0]['num'] > 0)) {
+    $fp = fopen('access.log', 'w+');
+    $r = flock($fp, LOCK_EX | LOCK_NB);
+    if($r) {
+        //拿到了锁
+        $user_id = mt_rand(1, 700);
+        $idata['user_id'] = $user_id;
+        $idata['goods_id'] = $data[0]['id'];
+        $idata['number'] = 1;
+        $idata['price'] = $data[0]['money'];
+        $idata['status'] = 1;
+        $idata['sku_id'] = 2;
+        $idata['order_sn'] = orderNo();
+        $idata['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $idata, 'ims_order'); //订单
+
+        $sql = 'UPDATE `ims_hotmallstore_goods` SET num=num -1 WHERE num > 0 and id = ' . $data[0]['id'];
+
+        if($conn->exec($sql)) {
+            $log['status'] = 1;
+            $log['msg'] = '减库成功';
+            $log['create_time'] = date('Y-m-d H:i:s');
+            insert($conn, $log, 'ims_order_log');
+        } else {
+            $log['status'] = 0;
+            $log['msg'] = '减库失败';
+            $log['create_time'] = date('Y-m-d H:i:s');
+            insert($conn, $log, 'ims_order_log');
+        }
+        flock($fp, LOCK_UN);
+        fclose($fp);
+    } else {
+        $log['status'] = -2;
+        $log['msg'] = '排队等待';
+        $log['create_time'] = date('Y-m-d H:i:s');
+        insert($conn, $log, 'ims_order_log');
+    }
+} else {
+    $log['status'] = -1;
+    $log['msg'] = '库存没有了';
+    $log['create_time'] = date('Y-m-d H:i:s');
+    insert($conn, $log, 'ims_order_log');
+}*/
